@@ -8,7 +8,7 @@ export CoxeterGroup, CoxeterElement
 export CoxGrp, CoxElt
 
 # Group functions
-export coxeter_matrix, rank, generators
+export coxeter_matrix, rank, generators, longest_element
 
 # Element functions
 export is_left_descent, is_right_descent
@@ -22,6 +22,12 @@ abstract type CoxElt end
 
 include("CoxeterGroupData.jl")
 include("CoxMin.jl")
+include("SymmetricGroup.jl")
+
+# Default implementations of some functions.
+
+"The sign homomorphism into {±1}"
+Base.sign(w::CoxElt) = length(w) % 2 == 0 ? 1 : -1
 
 """
     CoxeterGroup

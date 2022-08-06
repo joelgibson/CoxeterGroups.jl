@@ -46,3 +46,10 @@ for group_constructor = group_constructors
         @test length(Welts) == type.weyl_order
     end
 end
+
+# Test basic multiplication in symmetric groups.
+for n in 0:5
+    W, gens = symmetric_group(n)
+    Welts = enumerate_whole_group(W)
+    @test length(Welts) == factorial(n)
+end
