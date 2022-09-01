@@ -53,3 +53,47 @@ for n in 0:5
     Welts = enumerate_whole_group(W)
     @test length(Welts) == factorial(n)
 end
+
+# Check an implementation supports all operations appearing in the documentation (not necessarily that
+# the implementation of these operations is correct).
+groups = [
+    coxeter_group_min(Array{Int64}(undef, 0, 0)),
+    coxeter_group_min([2;;]),
+    coxeter_group_min([2 -1; -1 2]),
+    coxeter_group_min([2 -1 0; -1 2 -1; 0 -1 2]),
+    symmetric_group(1),
+    symmetric_group(2),
+    symmetric_group(3),
+    symmetric_group(4),
+]
+
+@testset "Supported operations $W" for (W, gens) in groups
+    @test gens == generators(W)
+    @test rank(W) == length(gens)
+    @test isone(one(W))
+    if is_finite(W)
+        w0 = longest_element(W)
+        @test all([length(w0 * gen) < length(w0) for gen in gens])
+    end
+
+    id = one(W)
+    @test W == parent(id)
+    @test inv(id) == id
+    @test length(id) == 0
+    @test sign(id) == 1
+    @test length(short_lex(id)) == 0
+    @test length(inverse_short_lex(id)) == 0
+
+    if rank(W) > 0
+        coxelt = *(gens...)
+        @test length(coxelt) == rank(W)
+        @test is_left_descent(1, coxelt)
+        @test is_right_descent(coxelt, rank(W))
+        @test left_multiply(1, coxelt) == gens[1] * coxelt
+        @test right_multiply(coxelt, 1) == coxelt * gens[1]
+        @test short_lex(coxelt) == 1:rank(W)
+        @test inverse_short_lex(coxelt) == reverse(short_lex(coxelt^-1))
+        @test coxelt^5 == coxelt^2 * coxelt^3
+        @test coxelt^-2 == inv(coxelt)^2
+    end
+end

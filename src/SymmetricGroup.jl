@@ -1,4 +1,4 @@
-export symmetric_group
+export CoxGrpSym, CoxEltSym, symmetric_group
 
 """
 CoxGrpSym implements Coxeter-theoretic operations on symmetric groups.
@@ -28,15 +28,21 @@ struct CoxEltSym <: CoxElt
     inv::Vector{Int}
 end
 
-"""
-    symmetric_group(n)
+@doc raw"""
+    symmetric_group(n) -> CoxGrpSym, gens
 
-Creates the symmetric group on ``n`` elements.
+Create the symmetric group on ``n`` elements (a Coxeter system of type ``A_{n-1}``), for ``n \geq 0``.
 """
 function symmetric_group(n)
+    n >= 0 || error("The argument $n to symmetric_group must be nonnegative.")
     G = CoxGrpSym(n)
     return G, generators(G)
 end
+
+# Note that both S0 and S1 are the trivial group, and so have Coxeter rank 0.
+rank(grp::CoxGrpSym) = max(0, grp.n - 1)
+
+is_finite(grp::CoxGrpSym) = true
 
 Base.one(grp::CoxGrpSym) = CoxEltSym(grp, collect(1:grp.n), collect(1:grp.n))
 
@@ -47,6 +53,8 @@ function generators(grp::CoxGrpSym)
     end
     return [CoxEltSym(grp, fwd, fwd) for fwd in fwds]
 end
+
+Base.parent(w::CoxEltSym) = w.group
 
 Base.isone(w::CoxEltSym) = w.fwd == 1:w.group.n
 
@@ -68,5 +76,46 @@ Base.length(w::CoxEltSym) = sum(1 for i in 1:length(w.fwd) for j in i+1:length(w
 
 longest_element(grp::CoxGrpSym) = CoxEltSym(grp, collect(grp.n:-1:1), collect(grp.n:-1:1))
 
-is_right_descent(w::CoxEltMin, t::Integer) = w.fwd[t] > w.fwd[t+1]
-is_left_descent(w::CoxEltMin, t::Integer) = w.inv[t] > w.inv[t+1]
+is_right_descent(w::CoxEltSym, t::T) where {T <: Integer} = w.fwd[t] > w.fwd[t+1]
+is_left_descent(t::T, w::CoxEltSym) where {T <: Integer} = w.inv[t] > w.inv[t+1]
+
+function right_multiply(w::CoxEltSym, t::T) where T <: Integer
+    fwd = copy(w.fwd)
+    inv = copy(w.inv)
+    inv[fwd[t]], inv[fwd[t+1]] = inv[fwd[t+1]], inv[fwd[t]]
+    fwd[t], fwd[t+1] = fwd[t+1], fwd[t]
+    return CoxEltSym(w.group, fwd, inv)
+end
+
+function left_multiply(t::T, w::CoxEltSym) where T <: Integer
+    fwd = copy(w.fwd)
+    inv = copy(w.inv)
+    fwd[inv[t]], fwd[inv[t+1]] = fwd[inv[t+1]], fwd[inv[t]]
+    inv[t], inv[t+1] = inv[t+1], inv[t]
+    return CoxEltSym(w.group, fwd, inv)
+end
+
+
+# Calculate the ShortLex word associated to an inverse permutation array in O(coxeter length) time.
+# In other words, to get the ShortLex normal form of (fwd, inv), call short_lex_array(inv).
+function short_lex_array(inv::Array{T}) where T <: Integer
+    # We'll be mutating the array, so take a copy.
+    inv_mut = copy(inv)
+
+    shortlex = T[]
+    i = 1
+    while i <= length(inv_mut) - 1
+        if inv_mut[i] > inv_mut[i+1]
+            push!(shortlex, i)
+            inv_mut[i], inv_mut[i+1] = inv_mut[i+1], inv_mut[i]
+            i = max(i - 1, 1)
+        else
+            i += 1
+        end
+    end
+
+    return shortlex
+end
+
+inverse_short_lex(w::CoxEltSym) = reverse!(short_lex_array(w.fwd))
+short_lex(w::CoxEltSym) = short_lex_array(w.inv)
