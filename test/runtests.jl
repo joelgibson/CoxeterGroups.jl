@@ -34,7 +34,7 @@ end
 # Test each of the different implementations
 group_constructors = [
     coxeter_group_min,
-    CoxeterGroup,
+    coxeter_group_recursive,
 ]
 
 # For each implementation, check they generate the correct number of elements in the symmetric group.

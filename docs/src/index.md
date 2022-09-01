@@ -1,14 +1,7 @@
 # CoxeterGroups.jl Documentation
 
-Coxeter groups and their elements are subtypes of the abstract types [`CoxGrp`](@ref) and [`CoxElt`](@ref).
-Currently there are two (incomplete) implementations, which can be constructed using either [`CoxeterGroup`](@ref) or [`coxeter_group_min`](@ref).
-The constructor takes a matrix, which can be either a generalised Cartan matrix, or a Coxeter matrix (currently `coxeter_group_min` cannot accept a Coxeter matrix), and returns a group object and list of generators.
-For example:
+This package is for creating and working with Coxeter groups.
 
-```julia
-W, (s, t) = coxeter_group_min([2 -1; -1 2])
-s*t*s == t*s*t
-```
 
 ## Creating a group
 
@@ -28,6 +21,7 @@ Here is a summary of the creation functions - there is more information on speci
 ```@docs
 coxeter_group_min
 symmetric_group
+coxeter_group_recursive
 ```
 
 
@@ -41,6 +35,7 @@ The following operations are supported on all group implementations:
 CoxeterGroups.rank(::CoxGrpMin)
 CoxeterGroups.generators(::CoxGrpMin)
 Base.one(::CoxGrpMin)
+CoxeterGroups.coxeter_matrix(::CoxGrpMin)
 CoxeterGroups.is_finite(::CoxGrpMin)
 CoxeterGroups.longest_element(::CoxGrp)
 ```
@@ -86,6 +81,52 @@ The following functions will then be defined:
 
 - For the group type: [`longest_element`](@ref).
 - For the element type: [`isone`](@ref), [`length`](@ref), [`sign`](@ref), [`short_lex`](@ref), [`inverse_short_lex`](@ref), [`*`](@ref), [`inv`](@ref), [`^`](@ref).
+
+
+## Code conventions
+
+Code conventions are (currently) as follows:
+
+- Library users should access data via methods, not via properties.
+- A Coxeter group implementation called `foo` should define a concrete subtype `CoxGrpFoo` of `CoxGrp`, and a concrete subtype `CoxEltFoo` of `CoxElt`.
+
+## Mathematical conventions
+
+A *generalised Cartan matrix* or *GCM* is a square matrix ``A \in \operatorname{Mat}_I(\mathbb{Z})`` over the integers which satisfies the following properties:
+
+- *(C1)* All diagonal elements are equal to ``2``,
+- *(C2)* All off-diagonal entries are zero or negative, and
+- *(C3)* ``A_{ij} = 0`` if and only if ``A_{ji} = 0``.
+
+A *Coxeter-Cartan matrix* is a square matrix ``A`` over the reals which satisfies the conditions C1, C2, C3 of a GCM, and additionally
+
+- *(C4)* The product ``A_{ij} A_{ji}`` is either equal to ``4 \cos^2(\pi/m)`` for some ``m \in \{2, 3, \ldots\}``, or ``A_{ij} A_{ji} \geq 4``.
+
+
+A *based root datum* over the PID ``R`` (we will only be thinking of ``R = \mathbb{Z}`` or ``R = \mathbb{R}``) is the data of:
+
+- Two free ``R``-modules ``X`` and ``X^\vee``,
+- A perfect pairing ``\langle -, - \rangle \colon X^\vee \times X \to R``,
+- A collection of *simple roots* ``\Delta = \{\alpha_i\}_{i \in I} \in X``,
+- A collection of *simple coroots* ``\Delta^\vee = \{\alpha_i^\vee\}_{i \in I} \in X^\vee``,
+
+such that the matrix ``A_{ij} := \langle \alpha_i^\vee, \alpha_j \rangle`` is a GCM.
+We then say that the based root datum is a *realisation* of the GCM ``A``.
+Define the reflections ``r_i \colon X \to X`` and ``r_i^\vee \colon X^\vee \to X^\vee`` by the formulas
+
+```math
+r_i(\lambda) = \lambda - \langle \alpha_i^\vee, \lambda \rangle \alpha_i, \quad
+r_i^\vee(\nu) = \nu - \langle \nu, \alpha_i \rangle \alpha_i^\vee.
+```
+
+Then the reflections each define a faithful representation of a Coxeter group ``(W, I)`` on each of ``X`` and ``X^\vee``, which are dual in the sense that ``\langle w \nu, \lambda \rangle = \langle \nu, w \lambda \rangle``.
+
+Every GCM ``A`` admits two canonical based root data.
+The *simply-connected* realisation is the root datum where ``X^\vee`` is the free ``R``-module with basis ``(\alpha_i^\vee)_{i \in I}``, ``X = \operatorname{Hom}(X^\vee, R)`` is the dual, the pairing ``\langle -, - \rangle`` is the canonical pairing between a module and its dual, and the simple roots ``\alpha_i`` are uniquely determined by the condition that ``\langle \alpha_i^\vee, \alpha_j \rangle = A_{ij}``.
+The *adjoint* realisation is the dual of the simply-connected realisation.
+
+In the reflection representation implementation, we use the adjoint realisation of a GCM.
+Concretely, the space ``X`` is the space of column vectors, with each simple root ``\alpha_i`` a coordinate vector, the space ``X^\vee`` is the space of row vectors, with each simple coroot ``\alpha_i^\vee`` equal to the ``i``th row of the Cartan matrix, and the pairing ``\langle -, - \rangle`` is the dot product.
 
 
 

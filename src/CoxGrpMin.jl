@@ -83,6 +83,13 @@ Return the identity in the Coxeter group ``W``.
 Base.one(grp::CoxGrpMin) = CoxEltMin(grp, [])
 
 """
+    coxeter_matrix(W::CoxGrp) -> Matrix
+
+Return the Coxeter matrix for this group.
+"""
+coxeter_matrix(grp::CoxGrpMin) = copy(grp.coxeter_matrix)
+
+"""
     is_finite(W::CoxGrp) -> Bool
 
 Return whether the group ``W`` is finite or not."""
