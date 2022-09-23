@@ -1,9 +1,37 @@
 using Match
 
-export classify_coxeter_matrix, classify_gcm, is_finite_type, cartan_matrix, root_system, is_finite_type, positive_roots, positive_coroots, coxeter_system, degrees, order, coxeter_number, number_of_reflections, exponents
+export classify_coxeter_matrix, classify_gcm, is_irreducible, is_affine_type, is_finite_type, coxeter_system, degrees, order, coxeter_number, number_of_reflections, exponents
 
 #=
     Classification of finite and affine-type Dynkin diagrams, and finite-type Coxeter systems.
+
+The functions classify_coxeter_matrix(...) and classify_gcm(...) take a Coxeter matrix or GCM, and return a list their
+connected components. Each connected component is a pair, with the first element giving the type, like (:A, 4), and the
+second element of the pair giving the vertex reading order which takes the given matrix to Kac' convention. These are
+meant to be internal library functions, used when constructing Coxeter systems or Cartan systems.
+
+For example, classification of a Coxeter matrix (1's and 2's are omitted)
+    .  3  .  .  .  .  .  .  .
+    3  .  .  .  .  .  .  3  .
+    .  .  .  3  .  .  .  .  .
+    .  .  3  .  3  .  .  .  .
+    .  .  .  3  .  4  .  .  .
+    .  .  .  .  4  .  .  .  .
+    .  3  .  .  .  .  .  .  .
+    .  .  .  .  .  .  .  .  .
+whose underlying Coxeter graph looks like
+    1 -- 2 -- 7    8     6 === 5 -- 4 -- 3
+would return the list of components
+    [
+        ((:A, 3), [1, 2, 7]),
+        ((:C, 4), [3, 4, 5, 6]),
+        ((:A, 1), [8]),
+    ]
+The classify_coxeter_matrix(...) function can output finite types like (:A, 3), (:C, 4), (:I, 2, m), or affine types
+such as (:A, 3, :aff). It will output type C rather than B, and only uses (:I, 2, m) for m = 0 or m ≥ 7. The other
+classify_gcm(...) function can output a larger range of types, in particular it can output the "dual affine" types,
+such as (:B, 3, :dualaff), and the interesting type A affine types, which are (:BC, n, :aff). Connected components of
+indefinite type are simply classified as (:Unknown, rank).
 
 The following table is a list of all finite and affine type Dynkin diagrams and finite type Coxeter systems. The I(GCM)
 and I(Cox) columns specify which types should be taken to make an irredundant list of finite and affine type GCMs or
@@ -39,22 +67,12 @@ E~8          Yes       Yes      Tree(3)     -
 F~4          Yes       Yes      Path        4
 G~2          Yes       Yes      Path        6
 
-BC@1         Yes       A~1      Path        ∞       Kac: A2(2)
-BC@n         n ≥ 2     C~n      Path        4,4     Kac: A_{2(n - 1)}(2)    Bonds point same direction.
+BC~1         Yes       A~1      Path        ∞       Kac: A2(2)
+BC~n         n ≥ 2     C~n      Path        4,4     Kac: A_{2(n - 1)}(2)    Bonds point same direction.
 B@n          n ≥ 3     B~n      Tree(3)     4       Kac: A_{2n - 1}(2)
 C@n          n ≥ 2     C~n      Path        4,4     Kac: D_{n-1}(2)         Bonds point out.
 F@4          Yes       F~4      Path        4,4     Kac: E6(2)
 G@2          Yes       G~2      Path        6       Kac: D4(3)
-
-Types are named as follows:
-- Finite type GCMs are a pair (type, rank), for example (:C, 4)
-- Affine type GCMs are a triple (type, rank, kind), where (type, rank) specifies a finite type irreducible GCM, and kind
-  is either :aff (the usual affinisation inside Aff(coroot space)) or :dualaff (affinisation inside Aff(root space)).
-- The other finite Coxeter groups are named (:H, n) for n in 2, 3, 4, and (:I, 2, m).
-- Something not on the classification list is classified as (:Unknown, rank).
-
-The differences between types Bn and Cn, and between :aff and :dualaff, are only visible on the Cartan matrix rather
-than the Coxeter matrix. When classifying Coxeter matrices, type :C will be preferred to :B, and :aff to :dualaff.
 =#
 
 """
@@ -443,7 +461,7 @@ end
 # Convert a list of types to a string like "A4 x H3"
 type_to_string(types::Vector) = join([type_to_string(type) for (type, comp) in types], " x ")
 
-# Check if a particular type like (:A, 5) is finite type.
+# Check if a particular type like (:A, 5) or (:C, 5, :aff) is finite type.
 is_finite_type(type::Tuple) = @match type begin
     (:Unknown, n) => false
     (:A, n) => true
@@ -458,27 +476,10 @@ is_finite_type(type::Tuple) = @match type begin
     _ => false
 end
 
-# Retrieve the degrees of a finite type Coxeter group.
-degrees(type::Tuple) = @match type begin
-    (:A, n) => Vector(2:n+1)
-    (:B, n) => Vector(2:2:2*n)
-    (:C, n) => Vector(2:2:2*n)
-    (:D, n) => sort([Vector(2:2:2*n-2); n])
-    (:E, 6) => [2, 5, 6, 8, 9, 12]
-    (:E, 7) => [2, 6, 8, 10, 12, 14, 18]
-    (:E, 8) => [2, 8, 12, 14, 18, 20, 24, 30]
-    (:F, 4) => [2, 6, 8, 12]
-    (:G, 2) => [2, 6]
-    (:H, 3) => [2, 6, 10]
-    (:H, 4) => [2, 12, 20, 30]
-    (:I, 2, m) => [2, m]
-    _ => error("$(type) is not finite type")
-end
-
-# Check if a list of types like [(:A, 5), (:B, 3, :aff)] is finite type.
+# Check if a list of components like [((:A, 5), [1, 2, 3, 4, 5]), ((:B, 3, :aff), [6, 7, 8])] is finite type.
 is_finite_type(composite_type::Vector) = all(is_finite_type(type) for (type, comp) in composite_type)
 
-# Check if a particular type like (:A, 5, :aff) is affine type.
+# Check if a particular type (:A, 5, :aff) is affine type.
 is_affine_type(type::Tuple) = @match type begin
     (_, _, :aff) => true
     (_, _, :dualaff) => true
@@ -488,8 +489,26 @@ end
 # Check if a list of types is affine type. This only occurs when there is a single type, and it is affine.
 is_affine_type(composite_type::Vector) = length(composite_type) == 1 && is_affine_type(composite_type[1][1])
 
+# The degrees of a finite type irreducible Coxeter system.
+# From Table 1 in §3.7 of Humphrey's "Reflection groups and Coxeter groups".
+degrees(type::Tuple) = @match type begin
+    (:A, n), if n >= 1 end => Vector(2:n+1)
+    (:B, n), if n >= 2 end => Vector(2:2:2*n)
+    (:C, n), if n >= 2 end => Vector(2:2:2*n)
+    (:D, n), if n >= 2 end => sort([Vector(2:2:2*n-2); n])
+    (:E, 6) => [2, 5, 6, 8, 9, 12]
+    (:E, 7) => [2, 6, 8, 10, 12, 14, 18]
+    (:E, 8) => [2, 8, 12, 14, 18, 20, 24, 30]
+    (:F, 4) => [2, 6, 8, 12]
+    (:G, 2) => [2, 6]
+    (:H, 3) => [2, 6, 10]
+    (:H, 4) => [2, 12, 20, 30]
+    (:I, 2, m), if m >= 2 end => [2, m]
+    _ => error("$(type) is not finite type")
+end
 
-# A Coxeter system is a classified Coxeter matrix, along with some extra data.
+
+# A Coxeter system is a classified Coxeter matrix.
 struct CoxeterSystem
     coxeter_matrix::Matrix{Int}
     components::Vector{Tuple{Tuple, Vector{Int}}}
@@ -519,41 +538,61 @@ function Base.show(io::IO, cox::CoxeterSystem)
     write(io, "Coxeter system ($(join(adjectives, ", "))) of type $(type_to_string(cox.components))")
 end
 
-"""
+@doc raw"""
     coxeter_matrix(cox::CoxeterSystem)
 
-Return the underlying Coxeter matrix of a Coxeter system.
+The Coxeter matrix of a Coxeter system ``(W, S)`` is the matrix ``m_{s, t} = \operatorname{ord}(st)`` for ``s, t ∈ S``.
 """
 coxeter_matrix(cox::CoxeterSystem) = copy(cox.coxeter_matrix)
 
 """
     rank(cox::CoxeterSystem)
 
-The rank of a Coxeter system is the number of simple generators.
+The rank of a Coxeter system ``(W, S)`` is the number ``|S|`` of simple generators.
 """
 rank(cox::CoxeterSystem) = size(cox.coxeter_matrix)[1]
 
 """
+    is_irreducible(cox::CoxeterSystem)
+
+A Coxeter system ``(W, S)`` is irreducible if its associated underyling graph consists of a single connected component.
+In particular, ``|S| ≥ 1``.
+"""
+is_irreducible(cox::CoxeterSystem) = length(cox.components) == 1
+
+"""
     is_finite_type(cox::CoxeterSystem)
 
-Return true if the Coxeter system is finite type, meaning that the associated Coxeter group is finite.
+A Coxeter system ``(W, S)`` is finite type if the group ``W`` is finite.
 """
 is_finite_type(cox::CoxeterSystem) = is_finite_type(cox.components)
 
 """
+    is_affine_type(cox::CoxeterSystem)
+
+A Coxeter system ``(W, S)`` is affine type if is irreducible, and the unique component is of affine type.
+"""
+is_affine_type(cox::CoxeterSystem) = is_affine_type(cox.components)
+
+@doc raw"""
     degrees(cox::CoxeterSystem)
 
-Retrieve the degrees of a finite-type Coxeter system, or error if the system is not finite type.
+The degrees of a Coxeter system ``(W, S)`` are the degrees of the fundamental invariants for the action of ``W`` on
+``\operatorname{Sym}(V^*)``, where ``V`` is an irreducible representation of ``W`` with ``S`` acting by reflections.
+Throws an error if the system is not finite type.
 """
 function degrees(cox::CoxeterSystem)
     is_finite_type(cox) || error("Coxeter system has infinite order")
     return sort([degree for (type, comp) in cox.components for degree in degrees(type)])
 end
 
-"""
+@doc raw"""
     exponents(cox::CoxeterSystem)
 
-The exponents of a finite-type Coxeter system (one less than the degrees), or error if the system is not finite type.
+The exponents ``m_i`` of a Coxeter system ``(W, S)`` describe the eigenvalues (with multiplicity) of a Coxeter element
+acting on the Tits representation ``V``, which are roots of unity ``\exp(2 \pi i m_i / h)`` where ``h`` is the Coxeter
+number.
+Throws an error if the system is not finite type.
 """
 function exponents(cox::CoxeterSystem)
     is_finite_type(cox) || error("Coxeter system has infinite order")
@@ -563,7 +602,8 @@ end
 """
     order(cox::CoxeterSystem)
 
-Return the order of the group for a finite-type Coxeter system, or error if the system is not finite type.
+The order of a Coxeter system ``(W, S)`` is the order of the group ``W``.
+Throws an error if the system is not finite type.
 """
 function order(cox::CoxeterSystem)
     is_finite_type(cox) || error("Coxeter system has infinite order")
@@ -573,8 +613,9 @@ end
 """
     number_of_reflections(cox::CoxeterSystem)
 
-Return the number of reflections (number of positive roots) in a finite-type Coxeter system, or error if the system is
-not finite-type.
+The number of reflections in a Coxeter system ``(W, S)`` is the number of conjugates of the simple generators ``S``, or
+equivalently the number of roots in a root system for ``W``.
+Throws an error if the system is not finite type.
 """
 function number_of_reflections(cox::CoxeterSystem)
     is_finite_type(cox) || error("Coxeter system has infinite order")
@@ -584,335 +625,10 @@ end
 """
     coxeter_number(cox::CoxeterSystem)
 
-Return the Coxeter number of the system, the order of the Coxeter element, or error if the system is not finite type.
+The Coxeter number ``h`` of a Coxeter system ``(W, S)`` is the order of any Coxeter element (product of all simple
+reflections). Throws an error if the system is not finite type.
 """
 function coxeter_number(cox::CoxeterSystem)
     is_finite_type(cox) || error("Coxeter system has infinite order")
     return degrees(cox)[end]
 end
-
-
-
-# Get a Cartan matrix, in the Kac numbering convention.
-cartan_matrix(type::Tuple) = @match type begin
-    # Finite type GCMs.
-    (:A, n), if n >= 0 end => [i == j ? 2 : abs(i - j) == 1 ? -1 : 0 for i in 1:n, j in 1:n]
-    (:B, n), if n >= 2 end => begin
-        gcm = cartan_matrix((:A, n))
-        gcm[n, n-1] = -2
-        return gcm
-    end
-    (:BC, 1) => [2;;]
-    (:BC, n), if n >= 2 end => cartan_matrix((:B, n))
-    (:C, n), if n >= 2 end => begin
-        gcm = cartan_matrix((:A, n))
-        gcm[n-1, n] = -2
-        return gcm
-    end
-    (:D, n), if n >= 2 end => begin
-        # Start with a block containing a path and two disconnected vertices, then connect them.
-        gcm = cat(cartan_matrix((:A, n-2)), [2 0 ; 0 2]; dims=(1, 2))
-        if n >= 3
-            gcm[n, n-2] = gcm[n-2, n] = -1
-            gcm[n, n-1] = gcm[n-1, n] = -1
-        end
-        return gcm
-    end
-    (:E, n), if 6 <= n <= 8 end => begin
-        # Start with a path and a disconnected vertex, then attach the vertex at the right point.
-        # Under the Kac convention, the vertex attaches to 3 in E6 and E7, and 5 in E8.
-        mat = cat(cartan_matrix((:A, n-1)), [2;;]; dims=(1, 2))
-        tri = (n == 6 || n == 7) ? 3 : 5
-        mat[tri, n] = mat[n, tri] = -1
-        return mat
-    end
-    (:F, 4) => [
-        2 -1  0  0
-       -1  2 -1  0
-        0 -2  2 -1
-        0  0 -1  2
-    ]
-    (:G, 2) => [
-         2 -1
-        -3  2
-    ]
-
-    # For affine type GCMs, build the root system and perform affinisation or dual affinisation.
-    (label, n, :aff) => begin
-        data = finite_gcm_data((label, n))
-        data === nothing && error("The type $((label, n)) is not a finite type, and cannot be affinised.")
-        data.is_irreducible || error("The finite type $((label, n)) is not irreducible, and cannot be affinised.")
-
-        # To affinise, we want to add a root γ such that ⟨α_i^, γ⟩ = ⟨α_i^, -α~⟩, where α~ is the highest root in the
-        # original system. Likewise, the new coroot γ^ should satisfy ⟨γ^, α_i⟩ = ⟨-(α~)^, α_i⟩, where (α~)^ is the
-        # root dual to the highest root, often called the "highest short coroot". If the original Cartan matrix is A,
-        # it then follows that the affinisation is
-        # [ A            A*(-α~) ]
-        # [ -(α~)^ * A   2       ]
-        gcm = cartan_matrix((label, n))
-        return [
-            gcm                                             -gcm * reshape(data.highest_root, :, 1)
-            -reshape(data.highest_root_dual, 1, :) * gcm     2
-        ]
-    end
-    (label, n, :dualaff) => begin
-        data = finite_gcm_data((label, n))
-        data === nothing && error("The type $((label, n)) is not a finite type, and cannot be affinised.")
-        data.is_irreducible || error("The finite type $((label, n)) is not irreducible, and cannot be affinised.")
-
-        # Follow the comment above for :aff, however here the roles of roots and coroots are switched, and the GCM is
-        # transposed (since we are really building an affine Weyl group as a subgroup of affine transformations in the
-        # root space, and so the "roots" of the new system live in the affinised coroot space).
-        gcm = transpose(cartan_matrix((label, n)))
-        return [
-            gcm                                               -gcm * reshape(data.highest_coroot, :, 1)
-            -reshape(data.highest_coroot_dual, 1, :) * gcm     2
-        ]
-    end
-    _ => error("No known Cartan matrix associated to type $(type)")
-end
-
-# A root or coroot in a root system
-struct Root
-    index::Int          # Index in the root system
-    rt::Vector{Int}     # Coordinates in root basis
-    wt::Vector{Int}     # Coordinates in weight basis
-end
-
-# A finite root system
-struct RootSystem
-    # Underlying Cartan matrix and divisibility vector (all 1's unless there are type BC components).
-    gcm::Matrix{Int}
-    divs::Vector{Int}
-
-    # Type and the components giving each type.
-    types::Vector{Tuple}
-    comps::Vector{Vector{Int}}
-
-    # Roots and coroots in parallel arrays, so the α ↦ α^ bijection is looking up the coroot with the same index.
-    roots::Vector{Root}
-    coroots::Vector{Root}
-
-    # Look up a root by its coordinates in the root basis, or a coroot by its coordinates in the coroot basis.
-    rtToIndex::Dict{Vector{Int}, Int}
-    cortToIndex::Dict{Vector{Int}, Int}
-end
-
-
-
-"""
-    root_system(gcm)
-
-Construct a root system for the finite-type generalised Cartan matrix gcm.
-"""
-root_system(gcm::AbstractMatrix) = root_system(gcm, Set{Int}())
-
-"""
-    root_system(gcm, doubled)
-
-Construct a root system for the finite-type generalised Cartan matrix gcm, with the specified simple roots doubled
-to produce a non-reduced root system.
-"""
-function root_system(gcm::AbstractMatrix{T}, doubled::Set{Int}) where {T <: Integer}
-    # Classify the types and components of the GCM, and check we are starting with a finite-type GCM.
-    components = classify_gcm(gcm)
-    is_finite_type(components) || error("Can only build the root system of a finite-type GCM.")
-    types = [type for (type, comp) in components]
-    comps = [comp for (type, comp) in components]
-
-    # Ensure the doubled roots are in compatible places.
-    rank = size(gcm)[1]
-    if !all(1 <= i <= rank && all(gcm[i, j] % 2 == 0 for j in 1:rank) for i in doubled)
-        error("Doubled roots may only be placed where the rows of the Cartan matrix are divisible by two.")
-    end
-
-    # Create the divided Cartan matrix dgcm = D^-1 A, and a vector of 1's and 2's called divs.
-    divs = [i ∈ doubled ? 2 : 1 for i in 1:rank]
-    # print("Divs: $(divs)\n")
-    dgcm = copy(gcm)
-    for i in doubled
-        dgcm[i, :] .÷= 2
-    end
-
-    # Create the initial (coroot, root) pairs for the simple roots.
-    roots = [Root(i, [i == j ? 1 : 0 for j in 1:rank], dgcm[:, i]) for i in 1:rank]
-    coroots = [Root(i, [i == j && i ∈ doubled ? 2 : i == j ? 1 : 0 for j in 1:rank], gcm[i, :]) for i in 1:rank]
-
-    # Add the (coroot, root) pairs for the doubled roots.
-    for i in doubled
-        push!(roots, Root(length(roots) + 1, [i == j ? 2 : 0 for j in 1:rank], 2 * gcm[:, i]))
-        push!(coroots, Root(length(coroots) + 1, [i == j ? 1 : 0 for j in 1:rank], gcm[i, :] .÷ 2))
-    end
-
-    # Add the coroots and roots we've seen so far to lookup tables.
-    rtToIndex = Dict(root.rt => root.index for root in roots)
-    cortToIndex = Dict(coroot.rt => coroot.index for coroot in coroots)
-
-    # We'll need a function which takes a (root, coroot) pair and applies the simple reflection s.
-    function reflect_pair(root::Root, coroot::Root, s::Int)
-        # s(root) = root - ⟨α_s^, root⟩ α_s. The pairing ⟨α_s^, root⟩ is d_s wt[s]. In the root basis this subtracts
-        # a single coordinate, and in the weight basis this subtracts a vector.
-        pairing = divs[s] * root.wt[s]
-        # print("Pairing of rt=$(root.rt), wt=$(root.wt) with α_$(s)^ is $(pairing)\n")
-        new_root = Root(root.index + 1, copy(root.rt), copy(root.wt))
-        new_root.rt[s] -= pairing
-        new_root.wt .-= pairing * dgcm[:, s]
-
-        # s(coroot) = coroot - ⟨coroot, α_s⟩ α_s^. The copairing ⟨coroot, α_s⟩ is wt[s].
-        copairing = coroot.wt[s]
-        new_coroot = Root(coroot.index + 1, copy(coroot.rt), copy(coroot.wt))
-        new_coroot.rt[s] -= copairing * divs[s]
-        new_coroot.wt .-= copairing * gcm[s, :]
-
-        return (new_root, new_coroot)
-    end
-
-    # Convenience function for adding a pair of roots to the data structures, or ignoring them if they exist already.
-    function add_pair(root::Root, coroot::Root)
-        if root.rt ∉ keys(rtToIndex)
-            push!(roots, root)
-            push!(coroots, coroot)
-            rtToIndex[root.rt] = root.index
-            cortToIndex[coroot.rt] = coroot.index
-        end
-    end
-
-    # Now play the root reflection game: keep applying reflections, making a breadth-first search of the root
-    # reflection graph, avoiding the negative roots. This gives us all the positive roots.
-    pos = 1
-    while pos < length(roots)
-        (root, coroot) = (roots[pos], coroots[pos])
-        pos += 1
-
-        for s in 1:rank
-            (sroot, scoroot) = reflect_pair(root, coroot, s)
-            # print("Reflection of rt=$(root.rt) wt=$(root.wt) in $(s) is rt=$(sroot.rt), wt=$(sroot.wt)\n")
-
-            # Ignore negative roots
-            if all(x -> x >= 0, sroot.rt)
-                add_pair(sroot, scoroot)
-            # else
-                # print("Discarding $(root.rt)\n")
-            end
-        end
-    end
-
-    # Add all negative roots.
-    nPositive = length(roots)
-    for i in 1:nPositive
-        add_pair(Root(nPositive + i, -roots[i].rt, -roots[i].wt), Root(nPositive + i, -coroots[i].rt, -coroots[i].wt))
-    end
-
-    return RootSystem(gcm, divs, types, comps, roots, coroots, rtToIndex, cortToIndex)
-end
-
-function Base.show(io::IO, rs::RootSystem)
-    write(io, "Root system of type $(rs.types), rank $(rank(rs)) with $(length(rs.roots)) roots.")
-end
-
-"""
-    rank(rs::RootSystem)
-
-Return the rank of the root system, the number of simple roots.
-"""
-rank(rs::RootSystem) = size(rs.gcm)[1]
-
-"""
-    highest_root(rs::RootSystem; basis=:root)
-
-Return the highest root, in the root basis. Pass basis=:weight for the weight basis.
-"""
-function highest_root(rs::RootSystem; basis=:root)
-    (basis == :root || basis == :weight) || error("The basis must be :root or :weight")
-
-end
-
-"""
-    positive_roots(rs::RootSystem, basis=:root)
-
-Return the positive roots, in the root basis. Pass basis:=weight for the weight basis.
-"""
-function positive_roots(rs::RootSystem; basis=:root)
-    (basis == :root || basis == :weight) || error("The basis must be :root or :weight")
-    return hcat([(basis == :root) ? x.rt : x.wt for x in rs.roots]...)
-end
-
-"""
-    positive_coroots(rs::RootSystem, basis=:root)
-
-Return the positive coroots, in the coroot basis. Pass basis:=weight for the coweight basis.
-"""
-function positive_coroots(rs::RootSystem; basis=:root)
-    (basis == :root || basis == :weight) || error("The basis must be :root or :weight")
-    return hcat([(basis == :root) ? x.rt : x.wt for x in rs.coroots[1:length(rs.coroots)÷2]]...)
-end
-
-
-
-# This type should not be used outside of this file. It is used to construct the affinisations and dual affinisations
-# of finite-type irreducible root systems.
-#
-# This is giving the wrong thing when affinising for type BC because the pairing between the root and coroot bases
-# is no longer the Cartan matrix A, instead it's D^-1 A.
-# Perhaps it would be better after all to build the root system, and then just take the fundamental weight vectors
-# for the highest root/coroot etc.
-struct FiniteGCMData
-    is_irreducible::Bool                # Is this type irreducible (so it has an affinisation).
-    highest_root::Vector{Int}           # Highest root, in the root basis.
-    highest_root_dual::Vector{Int}      # (Highest root)^, in the coroot basis. Also called the highest short coroot.
-    highest_coroot::Vector{Int}         # Highest coroot, in the coroot basis.
-    highest_coroot_dual::Vector{Int}    # (Highest coroot)^, in the root basis. Also called the highest short root.
-end
-
-# Shortcut method for simply-laced types where highest roots are all the same.
-FiniteGCMData(is_irreducible::Bool, root::Vector{Int}) = FiniteGCMData(is_irreducible, root, root, root, root)
-
-# Given a finite-type label, return a FiniteGCMData giving the highest roots,
-# or nothing if the system is not defined.
-finite_gcm_data(type::Tuple) = @match type begin
-    (:A, n) => FiniteGCMData(n >= 1, [1 for i in 1:n])
-    (:B, n) => FiniteGCMData(
-        n >= 2,
-        [i == 1 ? 1 : 2 for i in 1:n],
-        [i == n ? 1 : 2 for i in 1:n],
-        [1 for i in 1:n],
-        [(i == 1 || i == n) ? 1 : 2 for i in 1:n],
-    )
-    (:BC, n) => FiniteGCMData(
-        n >= 1,
-        [2 for i in 1:n],
-        [1 for i in 1:n],
-        [2 for i in 1:n],
-        [1 for i in 1:n],
-    )
-    (:C, n) => FiniteGCMData(
-        n >= 2,
-        [i == n ? 1 : 2 for i in 1:n],
-        [i == 1 ? 1 : 2 for i in 1:n],
-        [(i == 1 || i == n) ? 1 : 2 for i in 1:n],
-        [1 for i in 1:n],
-    )
-    (:D, n) => FiniteGCMData(n >= 3, [(i == 1 || i == n-1 || i == n) ? 1 : 2 for i in 1:n])
-    (:E, 6) => FiniteGCMData(true, [1, 2, 3, 2, 1, 2])
-    (:E, 7) => FiniteGCMData(true, [2, 3, 4, 3, 2, 1, 2])
-    (:E, 8) => FiniteGCMData(true, [2, 3, 4, 5, 6, 4, 2, 3])
-    (:F, 4) => FiniteGCMData(
-        true,
-        [2, 3, 4, 2],
-        [2, 4, 3, 2],
-        [1, 2, 3, 2],
-        [2, 3, 2, 1],
-    )
-    (:G, 2) => FiniteGCMData(true, [2, 3], [3, 2], [1, 2], [2, 1])
-    _ => nothing
-end
-
-
-# (0, 2)=[-2,-2] (1, 2)        (2, 2) = s1(2a2)
-#        (0, 1)          (1, 1) = s1(a2)
-#                  0           (1, 0) = [2, 0]
-#
-
-# 2 ([2, 0], [-2, -2])
-#  -----------------    = -8/4 = -2
-# ([2, 0], [2, 0])

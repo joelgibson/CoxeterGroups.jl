@@ -177,3 +177,42 @@ Complexity of operations in terms of ``n``:
 - Multiplication is ``O(n)``.
 - Calculating the sign of a permutation is ``O(n)``
 - Taking Coxeter length takes ``O(n^2)`` time (this could be improved to ``O(n \log n)`` by a standard divide-and-conquer trick to count inversions).
+
+
+## Creating Coxeter systems
+
+A Coxeter system is completely described by a Coxeter matrix, however there is a lot that can be determined about Coxeter systems of finite type by their classification, such as number of roots, order of the Weyl group, and so on.
+A Coxeter matrix or Cartan matrix can be given to the [`coxeter_system`](@ref) constructor to return a Coxeter system, an object that knows this classification and related data.
+For instance:
+
+```@example coxeter_system
+using CoxeterGroups
+gcm = [
+     2  -1   0   0
+    -1   2  -1   0
+     0  -2   2   0
+     0   0   0   2
+]
+cox = coxeter_system(gcm)
+cox
+```
+
+Data known purely by classification can then be queried:
+
+```@example coxeter_system
+number_of_reflections(cox), coxeter_number(cox), order(cox)
+```
+
+The construction methods and information methods that work with Coxeter systems is below:
+
+```@docs
+coxeter_system
+is_irreducible(::CoxeterSystem)
+is_finite_type(::CoxeterSystem)
+is_affine_type(::CoxeterSystem)
+order(::CoxeterSystem)
+coxeter_number(::CoxeterSystem)
+number_of_reflections(::CoxeterSystem)
+degrees(::CoxeterSystem)
+exponents(::CoxeterSystem)
+```
