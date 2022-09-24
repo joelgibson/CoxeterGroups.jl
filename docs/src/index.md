@@ -181,8 +181,9 @@ Complexity of operations in terms of ``n``:
 
 ## Creating Coxeter systems
 
-A Coxeter system is completely described by a Coxeter matrix, however there is a lot that can be determined about Coxeter systems of finite type by their classification, such as number of roots, order of the Weyl group, and so on.
-A Coxeter matrix or Cartan matrix can be given to the [`coxeter_system`](@ref) constructor to return a Coxeter system, an object that knows this classification and related data.
+A *Coxeter system* is an object which stores a Coxeter matrix along with a classification into components of known type.
+Currently all finite and affine type components are classified, but anything indefinite (hyperbolic or otherwise) will be classified as `Unknown` type.
+Some properties of finite-type Coxeter systems can be inferred entirely from this classification, without having to construct a group object at all.
 For instance:
 
 ```@example coxeter_system
@@ -200,13 +201,15 @@ cox
 Data known purely by classification can then be queried:
 
 ```@example coxeter_system
-number_of_reflections(cox), coxeter_number(cox), order(cox)
+rank(cox), coxeter_name(cox), number_of_reflections(cox), order(cox)
 ```
 
 The construction methods and information methods that work with Coxeter systems is below:
 
 ```@docs
 coxeter_system
+coxeter_name(::CoxeterSystem)
+rank(::CoxeterSystem)
 is_irreducible(::CoxeterSystem)
 is_finite_type(::CoxeterSystem)
 is_affine_type(::CoxeterSystem)

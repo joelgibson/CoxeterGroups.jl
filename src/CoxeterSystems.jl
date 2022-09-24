@@ -1,6 +1,8 @@
 using Match
 
-export classify_coxeter_matrix, classify_gcm, is_irreducible, is_affine_type, is_finite_type, coxeter_system, degrees, order, coxeter_number, number_of_reflections, exponents
+export classify_coxeter_matrix, classify_gcm
+export is_irreducible, is_affine_type, is_finite_type
+export coxeter_system, coxeter_name, degrees, order, coxeter_number, number_of_reflections, exponents
 
 #=
     Classification of finite and affine-type Dynkin diagrams, and finite-type Coxeter systems.
@@ -553,6 +555,13 @@ The rank of a Coxeter system ``(W, S)`` is the number ``|S|`` of simple generato
 rank(cox::CoxeterSystem) = size(cox.coxeter_matrix)[1]
 
 """
+    coxeter_name(cox::CoxeterSystem)
+
+A string representing the type of the system, such as "H3 x A2".
+"""
+coxeter_name(cox::CoxeterSystem) = type_to_string(cox.components)
+
+"""
     is_irreducible(cox::CoxeterSystem)
 
 A Coxeter system ``(W, S)`` is irreducible if its associated underyling graph consists of a single connected component.
@@ -577,8 +586,9 @@ is_affine_type(cox::CoxeterSystem) = is_affine_type(cox.components)
 @doc raw"""
     degrees(cox::CoxeterSystem)
 
-The degrees of a Coxeter system ``(W, S)`` are the degrees of the fundamental invariants for the action of ``W`` on
-``\operatorname{Sym}(V^*)``, where ``V`` is an irreducible representation of ``W`` with ``S`` acting by reflections.
+The degrees ``d_1 ≤ ⋯ ≤ d_r`` of a Coxeter system ``(W, S)`` are the degrees of the fundamental invariants for the
+action of ``W`` on ``\operatorname{Sym}(V^*)``, where ``V`` is an irreducible representation of ``W`` with ``S`` acting
+by reflections.
 Throws an error if the system is not finite type.
 """
 function degrees(cox::CoxeterSystem)
@@ -589,9 +599,9 @@ end
 @doc raw"""
     exponents(cox::CoxeterSystem)
 
-The exponents ``m_i`` of a Coxeter system ``(W, S)`` describe the eigenvalues (with multiplicity) of a Coxeter element
-acting on the Tits representation ``V``, which are roots of unity ``\exp(2 \pi i m_i / h)`` where ``h`` is the Coxeter
-number.
+The exponents ``m_1 ≤ ⋯ ≤ m_r`` of a Coxeter system ``(W, S)`` describe the eigenvalues (with multiplicity) of a Coxeter
+element acting on the Tits representation ``V``, which are roots of unity ``\exp(2 \pi i m_i / h)`` where ``h`` is the
+Coxeter number.
 Throws an error if the system is not finite type.
 """
 function exponents(cox::CoxeterSystem)
@@ -625,10 +635,16 @@ end
 """
     coxeter_number(cox::CoxeterSystem)
 
-The Coxeter number ``h`` of a Coxeter system ``(W, S)`` is the order of any Coxeter element (product of all simple
-reflections). Throws an error if the system is not finite type.
+The Coxeter number ``h`` of an irreducible Coxeter system ``(W, S)`` is the order of any Coxeter element (product of all
+simple reflections), or ``2 |Φ^+| / |S|``, or the largest degree ``d_{|S|}``.
+If the Coxeter system is not irreducible then these definitions all diverge, so this function will throw an error on a
+reducible system.
+
+Throws an error if the system is reducible or not of finite type.
 """
 function coxeter_number(cox::CoxeterSystem)
     is_finite_type(cox) || error("Coxeter system has infinite order")
+    is_irreducible(cox) || error("Coxeter system is reducible")
+
     return degrees(cox)[end]
 end
